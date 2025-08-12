@@ -10,5 +10,70 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- === POKEDEX FIXES (START) === -->
+<style>
+  /* Suchfeld sichtbar (kein weiß-auf-weiß) */
+  input[type="text"], input[type="search"]{
+    background:#fff!important; color:#111!important; border:1px solid #d4d4d4;
+    border-radius:12px; padding:10px 14px; caret-color:#111;
+  }
+  input::placeholder{ color:#6b7280!important; }
+
+  /* Kartentexte kontrastreich */
+  .poke-card-id{ color:#6b7280!important; font-size:12px; font-weight:600; line-height:1.1; }
+  .poke-card-name{ color:#111!important; font-size:14px; font-weight:700; line-height:1.2; }
+
+  /* Kartenbilder komplett anzeigen (hochkant ~3:4) */
+  .poke-img-wrap{
+    background:#f5f5f5; border-bottom:1px solid #eee; width:100%;
+    aspect-ratio:3/4; display:flex; align-items:center; justify-content:center;
+    overflow:hidden; border-top-left-radius:16px; border-top-right-radius:16px;
+  }
+  .poke-card-img{ width:100%; height:100%; object-fit:contain!important; display:block; }
+
+  /* (optional) hübsche Card-Defaults */
+  .poke-card{ border:1px solid #e5e7eb; border-radius:16px; background:#fff;
+              box-shadow:0 1px 2px rgba(0,0,0,.04); overflow:hidden; }
+  .poke-card-body{ padding:8px 12px; }
+</style>
+
+<script>
+(function(){
+  function pad3(n){ n=parseInt(n,10); return isNaN(n)?"":String(n).padStart(3,"0"); }
+  function dexFromSrc(src){ const m=(src||"").match(/(\d{1,4})(?=\D*$)/); return m?pad3(m[1]):""; }
+  function enhanceCard(card){
+    if(card.__enhanced) return;
+    const img=card.querySelector("img"); if(!img) return;
+
+    // Bild-Wrapper setzen
+    let wrap=img.closest(".poke-img-wrap");
+    if(!wrap){ wrap=document.createElement("div"); wrap.className="poke-img-wrap"; img.parentElement.insertBefore(wrap,img); wrap.appendChild(img); }
+    img.classList.remove("object-cover","object-fill","h-full");
+    img.removeAttribute("height"); img.removeAttribute("width");
+    img.classList.add("poke-card-img");
+
+    // Info-Panel (Dex + Name)
+    if(!card.querySelector(".poke-card-body")){
+      const name=(img.getAttribute("data-name")||img.alt||img.title||"Unbekannt").trim();
+      const rawDex=(img.getAttribute("data-dex")||img.getAttribute("data-id")||"").trim();
+      const dex=pad3(rawDex||dexFromSrc(img.src)||"");
+      const body=document.createElement("div");
+      body.className="poke-card-body";
+      body.innerHTML=`<div class="poke-card-id">#${dex||"???"}</div><div class="poke-card-name truncate">${name}</div>`;
+      (wrap.parentElement||card).appendChild(body);
+    }
+    card.__enhanced=true;
+  }
+  function enhanceAll(){
+    document.querySelectorAll(".poke-card, .card, [data-poke-card], li, .grid > *").forEach(n=>{
+      if(n.querySelector && n.querySelector("img")){ n.classList.add("poke-card"); enhanceCard(n); }
+    });
+  }
+  if(document.readyState==="loading"){ document.addEventListener("DOMContentLoaded",enhanceAll); } else { enhanceAll(); }
+  new MutationObserver(enhanceAll).observe(document.body,{childList:true,subtree:true});
+})();
+</script>
+<!-- === POKEDEX FIXES (END) === -->
+
   </body>
 </html>
