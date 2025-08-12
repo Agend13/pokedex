@@ -1,3 +1,4 @@
+import './searchfield.css';
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 // ------------------------------------------------------------
@@ -178,7 +179,24 @@ function PokeCard({ id, name, owned, onToggleOwned, onOpenCards }) {
   );
 }
 
+// ----------- Neue CardsDrawer mit Vorschau/Slider oben -------------------
 function CardsDrawer({ id, name, loading, cards, filter, setFilter, onClose }) {
+  // Vorschau-Slider-Index
+  const [previewIdx, setPreviewIdx] = React.useState(0);
+
+  // Preview-Rotation alle 3 Sekunden
+  React.useEffect(() => {
+    if (!cards || cards.length === 0) return;
+    setPreviewIdx(0); // Bei Kartenwechsel zurücksetzen
+    const interval = setInterval(() => {
+      setPreviewIdx((prev) => (prev + 1) % cards.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [cards]);
+
+  // Preview-Karte holen
+  const previewCard = cards[previewIdx];
+
   const filters = ["Alle", "Holo", "Reverse Holo", "Full Art", "V", "VMAX", "ex", "GX", "Illustration Rare", "Secret Rare", "Variante"];
   const filtered = React.useMemo(() => {
     if (filter === "Alle") return cards;
@@ -189,6 +207,27 @@ function CardsDrawer({ id, name, loading, cards, filter, setFilter, onClose }) {
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="absolute right-0 top-0 h-full w-full sm:w-[720px] bg-white dark:bg-neutral-950 shadow-xl flex flex-col">
+        {/* Vorschau oben */}
+        {previewCard && (
+          <div className="p-4 border-b flex flex-col items-center bg-neutral-100 dark:bg-neutral-900">
+            <div className="aspect-[3/4] w-32 rounded-xl overflow-hidden mb-2">
+              <img src={previewCard.images?.small} alt={previewCard.name} className="w-full h-full object-contain" />
+            </div>
+            <div className="font-semibold text-center">
+              {name?.de} <span className="text-neutral-400 text-xs">({name?.en})</span>
+            </div>
+            <div className="text-xs text-neutral-500 text-center mb-1">
+              #{id?.toString().padStart(4, "0")}
+            </div>
+            <div className="text-xs text-neutral-500 text-center">
+              {previewCard.set?.name} · {previewCard.rarity} · #{previewCard.number}
+            </div>
+            <div className="text-xs text-neutral-500 text-center">
+              {(previewCard.foreignData?.find?.((fd)=>fd.language==="German")?.name) || previewCard.name}
+            </div>
+          </div>
+        )}
+
         <div className="p-4 border-b flex items-center gap-3">
           <button onClick={onClose} className="px-3 py-1.5 rounded-2xl border text-sm">Schließen</button>
           <div className="ml-2 font-semibold truncate">#{id?.toString().padStart(4, "0")} – {name?.de} <span className="text-neutral-400 text-xs">({name?.en})</span></div>
@@ -242,6 +281,9 @@ export default function App() {
   const [cards, setCards] = useState([]);
   const [cardFilter, setCardFilter] = useState("Alle");
 
+  // Karten-Caching für schnelleren Drawer
+  const [cardsCache, setCardsCache] = useState({});
+
   useEffect(() => () => { abortRef.current.aborted = true; }, []);
 
   const hasCache = !!names;
@@ -255,13 +297,13 @@ export default function App() {
       // 1) Sofort EN-Liste holen (ein Request)
       const enMap = await fetchEnglishSpeciesList();
       setNames((prev) => {
-        const base = prev ? { ...enMap, ...prev } : enMap; // vorhandene DE überschreiben EN
+        const base = prev ? { ...enMap, ...prev } : enMap;
         saveCachedNames(base);
         return { ...base };
       });
       setProgress(0.1);
 
-      // 2) Parallel DE-Namen nachziehen (concurrency angepasst an CPU)
+      // 2) Parallel DE-Namen nachziehen
       const CONC = Math.min(48, (navigator.hardwareConcurrency || 8) * 2);
       const ids = Array.from({ length: MAX_ID }, (_, i) => i + 1).filter((id) => !names?.[id] || names[id].de.startsWith("#"));
       let done = 0;
@@ -318,7 +360,7 @@ export default function App() {
     } finally { setLoading(false); }
   }
 
-  // Ultra-Loader via Web Worker (max Performance + UI butterweich)
+  // Ultra-Loader via Web Worker
   async function ultraWorkerLoad() {
     if (loading) return;
     setLoading(true);
@@ -379,14 +421,23 @@ export default function App() {
     w.postMessage({ conc });
   }
 
-  // Karten-Handling
+  // Karten-Handling mit Cache
   async function openCardsFor(id) {
     if (!names?.[id]?.en) return;
     setCardsOpenFor(id);
+
+    // Prüfe, ob die Karten schon im Cache sind
+    if (cardsCache[id]) {
+      setCards(cardsCache[id]);
+      setCardsLoading(false);
+      return;
+    }
+
     setCardsLoading(true);
     try {
       const data = await fetchCardsByPokemonName(names[id].en);
       setCards(data);
+      setCardsCache(prev => ({ ...prev, [id]: data }));
     } catch {
       setCards([]);
     } finally {
@@ -427,6 +478,7 @@ export default function App() {
     setQuery("");
     setOnlyOwned(false);
     setProgress(0);
+    setCardsCache({});
   }
 
   function toggleOwned(id) {
